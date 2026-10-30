@@ -397,6 +397,36 @@ class InteractionTest(GatewayTestBase):
         self.assertEqual([c[1] for c in self.rest.callbacks()], ["/api/v10/interactions/7/tok-7/callback"])
 
 
+class WaitIdleTest(unittest.TestCase):
+    """wait_idle は、送っている途中の応答が終わるまで待つ（すぐ終了する cli.py で応答を取りこぼさないため）。"""
+
+    def test_waits_for_inflight_callback(self) -> None:
+        gw = gateway.Gateway("dummy", url="ws://127.0.0.1:1")
+        sent = threading.Event()
+
+        def slow_api(*args: Any, **kwargs: Any) -> None:
+            time.sleep(0.5)
+            sent.set()
+
+        gw.register("q1", lambda _i: {"type": 7, "data": {}})
+        with mock.patch.object(gateway.discord_api, "api", side_effect=slow_api):
+            gw._route({"id": "1", "token": "t", "type": 3, "data": {"custom_id": "dmcp:q1:approve"}})
+            self.assertTrue(gw.wait_idle(5))
+            self.assertTrue(sent.is_set())
+
+    def test_idle_immediately_and_after_handler_error(self) -> None:
+        gw = gateway.Gateway("dummy", url="ws://127.0.0.1:1")
+        self.assertTrue(gw.wait_idle(0.1))
+
+        def boom(_i: dict) -> dict:
+            raise RuntimeError("x")
+
+        gw.register("q2", boom)
+        with mock.patch.object(gateway.discord_api, "api"):
+            gw._route({"id": "2", "token": "t", "type": 3, "data": {"custom_id": "dmcp:q2:deny"}})
+            self.assertTrue(gw.wait_idle(5))
+
+
 class SingletonTest(GatewayTestBase):
     def tearDown(self) -> None:
         if gateway._instance is not None:

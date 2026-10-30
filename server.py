@@ -249,6 +249,9 @@ def _ask(p: ui.Prompt, timeout_seconds: int, download_dir: str | None) -> dict[s
             wake.clear()
     finally:
         if gw is not None:
+            # ボタンへの応答（メッセージの書き換え）を送り終えてから戻る。cli.py のようにすぐ終了する
+            # プロセスで、応答が届かずに「時間内に応答しませんでした」と出るのを防ぐ
+            gw.wait_idle()
             gw.unregister(p.qid)
 
     base = {"question_id": q["thread_id"], **({"note": note} if note else {})}

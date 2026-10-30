@@ -186,8 +186,7 @@ async def main_flow(s):
     assert len(threads()) == threads_before, "ボタンで答えた質問にはスレッドを作らない"
     assert r["status"] == "answered" and r["answer"] == "B" and r["via"] == "button" and r["indices"] == [1], r
     assert r["answered_by"] == f"User{USER}", r
-    time.sleep(1)  # インタラクションへの応答は Gateway のスレッドから非同期に送られる
-    cbs = callbacks()
+    cbs = callbacks()  # ask は応答を送り終えてから戻るので、待たずに確認できる
     assert cbs[-2][2]["data"]["flags"] == 64 and cbs[-1][2]["type"] == 7, cbs[-2:]
     print("ask button ok:", r["answer"])
 

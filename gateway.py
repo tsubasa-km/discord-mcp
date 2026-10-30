@@ -133,6 +133,7 @@ class Gateway:
         self._ready = False
         self._dead = False
         self._last_error: str | None = None
+        self._inflight = 0  # 応答を送っている途中のインタラクションの数（_cond で守る）
         # 以下は受信スレッドだけが触る
         self._session_id: str | None = None
         self._resume_url: str | None = None
@@ -199,6 +200,15 @@ class Gateway:
     def unregister(self, key: str) -> None:
         with self._cond:
             self._handlers.pop(key, None)
+
+    def wait_idle(self, timeout: float = 10.0) -> bool:
+        """送っている途中のインタラクション応答が終わるまで待つ。終われば True。
+
+        応答は別スレッドで送るので、すぐに終了するプロセス（cli.py など）はこれを待たないと
+        応答が届かず、Discord に「アプリケーションが時間内に応答しませんでした」と出る。
+        """
+        with self._cond:
+            return self._cond.wait_for(lambda: self._inflight == 0, timeout=timeout)
 
     # ---- 受信スレッド ----
 
@@ -358,24 +368,31 @@ class Gateway:
             # 同じトークンを使うほかのプロセス宛てかもしれないので、応答しない
             log.debug("未登録の key のインタラクションを無視しました: %s", parsed[0])
             return
+        with self._cond:
+            self._inflight += 1
         threading.Thread(
             target=self._respond, args=(handler, interaction), name="discord-interaction", daemon=True
         ).start()
 
     def _respond(self, handler: Handler, interaction: dict[str, Any]) -> None:
         try:
-            response = handler(interaction)
-        except Exception:  # noqa: BLE001 - ハンドラーの失敗はユーザーに知らせて続ける
-            log.exception("インタラクションのハンドラーが失敗しました")
-            response = ERROR_RESPONSE
-        if response is None:
-            return
-        try:
-            discord_api.api(
-                "POST", f"/interactions/{interaction['id']}/{interaction['token']}/callback", response
-            )
-        except (DiscordError, KeyError) as e:
-            log.warning("インタラクションへの応答に失敗しました: %s", e)
+            try:
+                response = handler(interaction)
+            except Exception:  # noqa: BLE001 - ハンドラーの失敗はユーザーに知らせて続ける
+                log.exception("インタラクションのハンドラーが失敗しました")
+                response = ERROR_RESPONSE
+            if response is None:
+                return
+            try:
+                discord_api.api(
+                    "POST", f"/interactions/{interaction['id']}/{interaction['token']}/callback", response
+                )
+            except (DiscordError, KeyError) as e:
+                log.warning("インタラクションへの応答に失敗しました: %s", e)
+        finally:
+            with self._cond:
+                self._inflight -= 1
+                self._cond.notify_all()
 
     # ---- 小物 ----
 
