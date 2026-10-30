@@ -151,12 +151,30 @@ python cli.py answer <question_id> --choice 明治座保守 --choice その他  
 `ask` / `confirm` が返した `question_id` を自分で記録しておき、次の実行で `answer` を呼んで返信を読む
 （`--choice` / `--confirm` を付けると、番号や「はい」を選択肢・承認として解釈する）。
 
-クラウドの定期実行で使う例:
+### Claude Code のクラウド（定期実行・ルーチン）で使う
+
+実行中のセッションで `git clone` や `pip install` をすると、外部コードの実行として自動モードの安全チェックに
+止められる。取得とインストールはクラウド環境の **セットアップスクリプト** で行い、セッションでは用意済みのものを使う。
+
+1. クラウド環境の編集画面で、**環境変数** に `DISCORD_BOT_TOKEN` / `DISCORD_CHANNEL_ID` / `DISCORD_USER_ID` を入れる
+2. **ネットワークアクセス** を「カスタム」にして `discord.com` と `gateway.discord.gg` を許可する
+   （「既定のリストも含める」はオンのまま。GitHub と PyPI に繋がるようにするため）
+3. **セットアップスクリプト** に次を入れる（環境のシステム Python には入れられないので仮想環境を作る）
 
 ```sh
-git clone -q --depth 1 --branch v0.3.0 https://github.com/tsubasa-km/discord-mcp /tmp/discord-mcp
-pip install -q -r /tmp/discord-mcp/requirements.txt
-python /tmp/discord-mcp/cli.py notify "週次反映が終わりました" --level success
+{
+  python3 --version
+  git clone -q --depth 1 --branch v0.3.1 https://github.com/tsubasa-km/discord-mcp /tmp/discord-mcp &&
+  python3 -m venv /tmp/discord-mcp/.venv &&
+  /tmp/discord-mcp/.venv/bin/pip install -q -r /tmp/discord-mcp/requirements.txt &&
+  echo SETUP_OK
+} > /tmp/discord-mcp-setup.log 2>&1 || true
+```
+
+ルーチンのプロンプトからは、仮想環境の Python で呼ぶ:
+
+```sh
+/tmp/discord-mcp/.venv/bin/python /tmp/discord-mcp/cli.py notify "週次反映が終わりました" --level success
 ```
 
 ## スケジュールタスクのプロンプトに入れる例
