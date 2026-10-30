@@ -135,6 +135,30 @@ Remove-Variable t
 
 登録できたかは `claude mcp list` で確認できる。
 
+## コマンドラインから使う（cli.py）
+
+MCP サーバーを登録できない環境（Claude のクラウドで動く定期実行など）やシェルスクリプトからは、
+同じ機能を `cli.py` で使える。環境変数は MCP サーバーと同じ。結果は JSON で標準出力に出る。
+
+```sh
+python cli.py notify "本文" --level success --title "週次反映"      # 本文に - を渡すと標準入力から読む
+python cli.py ask "どの課題に計上しますか？" --choice 明治座保守 --choice その他 --timeout 600 --task koshu
+python cli.py confirm "適用してよいですか？" --timeout 600
+python cli.py answer <question_id> --choice 明治座保守 --choice その他   # 保留中の質問への返信を ID だけで読む
+```
+
+実行ごとにファイルが消える環境では、保留中の質問を覚えておく `state.json` が残らない。
+`ask` / `confirm` が返した `question_id` を自分で記録しておき、次の実行で `answer` を呼んで返信を読む
+（`--choice` / `--confirm` を付けると、番号や「はい」を選択肢・承認として解釈する）。
+
+クラウドの定期実行で使う例:
+
+```sh
+git clone -q --depth 1 --branch v0.3.0 https://github.com/tsubasa-km/discord-mcp /tmp/discord-mcp
+pip install -q -r /tmp/discord-mcp/requirements.txt
+python /tmp/discord-mcp/cli.py notify "週次反映が終わりました" --level success
+```
+
 ## スケジュールタスクのプロンプトに入れる例
 
 ```text
@@ -171,6 +195,7 @@ pending が返ったら、その質問に依存しない作業だけ進め、依
 | `components.py` | 質問メッセージ・ボタン・選択メニューの組み立てと、押下時の判定（通信しない） |
 | `formatting.py` | 長文の分割、表の箇条書き化、通知の見出し（通信しない） |
 | `media.py` | 添付ファイルの送信・保存、フォーラムチャンネル、リアクション |
+| `cli.py` | コマンドラインから同じ機能を使う入口（MCP を登録できない環境向け） |
 | `configure.py` | 対話式のセットアップ（トークン・Intent・招待・チャンネル・宛先の確認と Claude Code への登録） |
 | `setup.ps1` / `setup.sh` | 仮想環境を作って依存パッケージを入れ、`configure.py` を実行する |
 
@@ -181,7 +206,7 @@ pending が返ったら、その質問に依存しない作業だけ進め、依
 
 ```powershell
 .venv\Scripts\python.exe -I tests\e2e_test.py server.py
-.venv\Scripts\python.exe -m unittest tests.test_components tests.test_formatting tests.test_media tests.test_gateway tests.test_configure
+.venv\Scripts\python.exe -m unittest tests.test_components tests.test_formatting tests.test_media tests.test_gateway tests.test_configure tests.test_cli
 ```
 
 本物の Discord での確認には、`~/.claude.json` に登録した設定をそのまま使う次のスクリプトを使う（トークンは表示しない）。
