@@ -50,7 +50,39 @@ Claude のスケジュールタスクなど無人で動くエージェントか�
 
 ## セットアップ
 
-### 1. Discord Bot を作る
+### かんたんセットアップ（推奨）
+
+1. [Discord Developer Portal](https://discord.com/developers/applications) で **New Application** を作り、
+   左メニューの **Bot** → **Reset Token** でトークンを表示しておく
+2. clone して、セットアップスクリプトを実行する
+
+```powershell
+git clone https://github.com/tsubasa-km/discord-mcp.git
+cd discord-mcp
+powershell -ExecutionPolicy Bypass -File setup.ps1     # macOS / Linux は sh setup.sh
+```
+
+スクリプトが仮想環境を作って依存パッケージを入れたあと、対話しながら次を進める。
+
+| ステップ | 内容 |
+|---|---|
+| トークン | 伏せ字で入力。形と有効性をその場で確かめる |
+| MESSAGE CONTENT INTENT | オフなら設定画面の URL を出し、オンにするまで待つ |
+| サーバーへの招待 | Bot がどのサーバーにも入っていなければ、必要な権限付きの招待 URL を出して待つ |
+| 投稿先チャンネル | Bot から見えるテキスト・フォーラムチャンネルを一覧にして、番号で選ぶ |
+| 宛先ユーザー | Bot の持ち主（チームならメンバー）を既定にする。別の人の ID も入れられる |
+| 登録 | `claude mcp add --scope user` で登録する（同じ名前の登録があれば置き換えるか確認する） |
+| テスト通知 | 選んだチャンネルに完了の通知を送る（`--no-test` で省略） |
+
+登録名を変えたいとき（例: 仕事用と個人用で 2 つ登録する）は `setup.ps1 --name discord-work` のように指定する。
+登録後に新しく開いた Claude Code のセッションやスケジュールタスクから使える。
+
+トークンは Claude Code の設定（`~/.claude.json`）に平文で保存される。また登録の瞬間だけ
+`claude mcp add` の引数としてプロセス一覧に現れる。気になる場合は下の「手動で設定する」の A（Proton Pass）を使う。
+
+### 手動で設定する
+
+#### 1. Discord Bot を作る
 
 1. [Discord Developer Portal](https://discord.com/developers/applications) で New Application を作る
 2. 左メニューの **Bot** で
@@ -65,7 +97,7 @@ Claude のスケジュールタスクなど無人で動くエージェントか�
    - 投稿先チャンネルを右クリック → **チャンネル ID をコピー**
    - 自分のアイコンを右クリック → **ユーザー ID をコピー**
 
-### 2. Python 環境
+#### 2. Python 環境
 
 ```powershell
 git clone https://github.com/tsubasa-km/discord-mcp.git
@@ -74,11 +106,11 @@ python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-### 3. Claude Code に登録する
+#### 3. Claude Code に登録する
 
 `--scope user` にすると、どのフォルダで動くセッションやスケジュールタスクからも使える。
 
-#### A. Proton Pass からトークンを渡す（トークンをどこにも平文で置かない）
+##### A. Proton Pass からトークンを渡す（トークンをどこにも平文で置かない）
 
 `discord.env.example` を `discord.env` にコピーし、ID とトークンの `pass://` 参照を書く
 （参照だけなのでこのファイル自体は秘密ではない。BOM なし UTF-8 で保存すること）。
@@ -90,7 +122,7 @@ claude mcp add discord --scope user -- pass-cli run --env-file C:\path\to\discor
 注意：`pass-cli run` は Proton Pass にログインしていないと起動できない。セッションが切れていると、
 スケジュールタスクの実行時にこの MCP サーバーが立ち上がらず、通知も質問もできなくなる。
 
-#### B. 環境変数を Claude の設定に直接書く
+##### B. 環境変数を Claude の設定に直接書く
 
 トークンは `~/.claude.json` に平文で保存される。自分で端末から実行すること。
 トークンをコマンドに直接書くと PowerShell の履歴に残るので、`Read-Host` で伏せ字入力して変数経由で渡す。
@@ -139,6 +171,8 @@ pending が返ったら、その質問に依存しない作業だけ進め、依
 | `components.py` | 質問メッセージ・ボタン・選択メニューの組み立てと、押下時の判定（通信しない） |
 | `formatting.py` | 長文の分割、表の箇条書き化、通知の見出し（通信しない） |
 | `media.py` | 添付ファイルの送信・保存、フォーラムチャンネル、リアクション |
+| `configure.py` | 対話式のセットアップ（トークン・Intent・招待・チャンネル・宛先の確認と Claude Code への登録） |
+| `setup.ps1` / `setup.sh` | 仮想環境を作って依存パッケージを入れ、`configure.py` を実行する |
 
 ## テスト
 
@@ -147,7 +181,7 @@ pending が返ったら、その質問に依存しない作業だけ進め、依
 
 ```powershell
 .venv\Scripts\python.exe -I tests\e2e_test.py server.py
-.venv\Scripts\python.exe -m unittest tests.test_components tests.test_formatting tests.test_media tests.test_gateway
+.venv\Scripts\python.exe -m unittest tests.test_components tests.test_formatting tests.test_media tests.test_gateway tests.test_configure
 ```
 
 本物の Discord での確認には、`~/.claude.json` に登録した設定をそのまま使う次のスクリプトを使う（トークンは表示しない）。
